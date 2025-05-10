@@ -1,12 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion } = require("mongodb");
-const multer = require("multer");
 require("dotenv").config();
-
-// Multer configuration for file uploads
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -35,6 +30,7 @@ async function run() {
     const usersCollection = db.collection("users");
     const applicationsCollection = db.collection("applications");
 
+    // GET: Retrieve all users
     app.get("/users", async (req, res) => {
       const cursor = usersCollection.find();
       const result = await cursor.toArray();
@@ -95,6 +91,7 @@ async function run() {
       }
     });
 
+    // GET: Retrieve all applications
     app.get("/applications", async (req, res) => {
       const cursor = applicationsCollection.find();
       const result = await cursor.toArray();
@@ -102,66 +99,51 @@ async function run() {
     });
 
     // POST: Save passport application
-    app.post(
-      "/applications",
-      upload.fields([
-        { name: "applicationCopy" },
-        { name: "nidBirthCertificate" },
-        { name: "nidOnlineCopy" },
-        { name: "studentJobCard" },
-        { name: "fatherNidBirthCertificate" },
-        { name: "motherNidBirthCertificate" },
-        { name: "utilityBillCopy" },
-        { name: "previousPassport" },
-        { name: "landRegister" },
-        { name: "citizenshipCertificate" },
-        { name: "onlineGD" },
-      ]),
-      async (req, res) => {
-        try {
-          const formData = req.body;
-          const files = req.files;
+    app.post("/applications", async (req, res) => {
+      try {
+        const applicationData = req.body;
 
-          // Debug: Log received files
-          console.log("Received files:", files);
-
-          // Convert files to an object with file buffers
-          const fileData = {};
-          for (const field in files) {
-            if (files[field][0]) {
-              fileData[field] = {
-                name: files[field][0].originalname,
-                data: files[field][0].buffer, // Store as buffer
-                contentType: files[field][0].mimetype,
-              };
-            }
-          }
-
-          // Generate application ID
-          const applicationId = `PAS-2025-${Math.floor(
-            10000 + Math.random() * 90000
-          )}`;
-
-          // Prepare application data
-          const application = {
-            applicationId,
-            ...formData,
-            files: fileData,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-
-          // Save to MongoDB
-          const result = await applicationsCollection.insertOne(application);
-          res.status(201).json({ applicationId, result });
-        } catch (error) {
-          console.error("Error in /applications:", error);
-          res
-            .status(500)
-            .json({ message: "Internal server error", error: error.message });
+        // Validate required fields
+        if (
+          !applicationData.passportType ||
+          !applicationData.onlineRegistrationNumber ||
+          !applicationData.fullName ||
+          !applicationData.dateOfBirth ||
+          !applicationData.mobileNumber ||
+          !applicationData.files ||
+          !applicationData.files.applicationCopy ||
+          !applicationData.files.nidBirthCertificate ||
+          !applicationData.files.nidOnlineCopy ||
+          !applicationData.files.fatherNidBirthCertificate ||
+          !applicationData.files.motherNidBirthCertificate ||
+          !applicationData.files.utilityBillCopy ||
+          !applicationData.files.landRegister ||
+          !applicationData.files.citizenshipCertificate
+        ) {
+          return res.status(400).json({ error: "Missing required fields" });
         }
+
+        // Generate application ID
+        const applicationId = `PAS-2025-${Math.floor(
+          10000 + Math.random() * 90000
+        )}`;
+
+        // Prepare application data
+        const application = {
+          applicationId,
+          ...applicationData,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        // Save to MongoDB
+        const result = await applicationsCollection.insertOne(application);
+        res.status(201).json({ message: "Application submitted", applicationId, result });
+      } catch (error) {
+        console.error("Error in POST /applications:", error);
+        res.status(500).json({ error: "Internal server error", error: error.message });
       }
-    );
+    });
   } catch (error) {
     console.error("Error in run function:", error);
   }
